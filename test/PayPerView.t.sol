@@ -10,7 +10,7 @@ contract PayPerViewTest is Test {
     function setUp() public {
         payPerView = new PayPerView();
     }
-    
+
     receive() external payable {}
 
     fallback() external payable {}
@@ -63,5 +63,26 @@ contract PayPerViewTest is Test {
         payPerView.uploadFile(cid, 0.0001 ether);
         payPerView.payForView{value: 0.0001 ether}(cid);
         payPerView.withdraw();
+        assertEq(payPerView.getBalance(address(this)), 0);
+    }
+
+    function testBalance() public {
+        string memory cid = "ceci est un cid";
+        payPerView.uploadFile(cid, 0.0001 ether);
+        payPerView.payForView{value: 0.0001 ether}(cid);
+        assertEq(payPerView.getBalance(address(this)), 0.0001 ether);
+    }
+
+    function testGetBalance() public {
+        string memory cid = "ceci est un cid";
+        payPerView.uploadFile(cid, 0.0001 ether);
+        payPerView.payForView{value: 0.0001 ether}(cid);
+        assertEq(payPerView.getBalance(address(this)), 0.0001 ether);
+    }
+
+    function testInvalidAddress() public {
+        hoax(address(0));
+        vm.expectRevert(InvalidAddress.selector);
+        payPerView.uploadFile("ceci est un cid", 0.0001 ether);
     }
 }

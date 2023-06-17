@@ -5,25 +5,45 @@ error UnknownCid();
 error UnknownAddress();
 error NotEnoughFunds();
 error InvalidPrice();
+error InvalidAddress();
+error FailedTransfer();
 
 contract PayPerView {
     mapping(address => string) public cids;
     mapping(string => uint256) public prices;
+    mapping(string => address) public uploaders;
     mapping(string => mapping(address => bool)) public viewers;
     mapping(address => uint256) public balances;
 
     constructor() {}
+
+    function setUploader(string memory _cid, address _address) private {
+        uploaders[_cid] = _address;
+    }
+
+    function getUploader(string memory _cid) public view returns (address) {
+        return uploaders[_cid];
+    }
+
+    function getBalance(address _address) public view returns (uint256) {
+        return balances[_address];
+    }
+
+    function setBalance(uint256 _balance) private {
+        balances[msg.sender] = _balance;
+    }
 
     function getCid(address _address) public view returns (string memory) {
         if (bytes(cids[_address]).length == 0) revert UnknownAddress();
         return cids[_address];
     }
 
-    function setCid(address _address, string memory _cid) internal {
+    function setCid(address _address, string memory _cid) private {
+        if (_address == address(0)) revert InvalidAddress();
         cids[_address] = _cid;
     }
 
-    function setPrice(uint256 _price, string memory _cid) internal {
+    function setPrice(uint256 _price, string memory _cid) private {
         prices[_cid] = _price;
     }
 
@@ -36,6 +56,7 @@ contract PayPerView {
         if (_price == 0) revert InvalidPrice();
         setCid(msg.sender, _cid);
         setPrice(_price, _cid);
+        setUploader(_cid, msg.sender);
     }
 
     function isViewer(string memory _cid) public view returns (bool) {
@@ -43,15 +64,24 @@ contract PayPerView {
     }
 
     function payForView(string memory _cid) public payable {
-        if (msg.value < getPrice(_cid)) revert NotEnoughFunds();
+        uint256 price = getPrice(_cid);
+
+        if (msg.value < price) revert NotEnoughFunds();
+
         viewers[_cid][msg.sender] = true;
-        balances[msg.sender] += msg.value;
+        address uploader = getUploader(_cid);
+        uint256 uploaderBalance = getBalance(uploader);
+        setBalance(uploaderBalance + msg.value);
     }
 
     function withdraw() public {
-        uint256 amountToTransfer = balances[msg.sender];
+        uint256 amountToTransfer = getBalance(msg.sender);
+        setBalance(0);
 
-        (bool success, ) = payable(msg.sender).call{value: amountToTransfer}("");
-        require(success, "Transfer failed.");
+        (bool success, ) = payable(msg.sender).call{value: amountToTransfer}(
+            ""
+        );
+
+        if (!success) revert FailedTransfer();
     }
 }
